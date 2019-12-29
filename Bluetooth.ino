@@ -129,7 +129,8 @@ void BTScanForSMAInverterToPairWith()
   //Forget existing pairing
   BTSendStringAndWait(retstring,F("AT+RMAAD"));
   //Sets speed to 9600 bits for normal operation (effective after reset of chip)
-  BTSendStringAndWait(retstring,F("AT+UART=38400,0,0"));
+  // tried 38400. Works in CMD-mode, but doesn't connect in DATA mode.
+  BTSendStringAndWait(retstring,F("AT+UART=9600,0,0"));
   //Allow connection to any slave
   BTSendStringAndWait(retstring,F("AT+CMODE=1"));
   //Initialize the SPP profile lib
