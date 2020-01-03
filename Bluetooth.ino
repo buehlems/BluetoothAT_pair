@@ -34,7 +34,8 @@ void quickblink() {
   digitalWrite( RED_LED, HIGH);
 }
 
-void BTInitStartup(bool ForcePair) {
+// this function is not needed right now since I can turn on/off the bluetooth shield
+char *BTInitStartup(bool ForcePair) {
   BTSwitchOff();
 
   pinMode(INVERTERSCAN_PIN, INPUT);
@@ -42,10 +43,20 @@ void BTInitStartup(bool ForcePair) {
 
   //Check if pin/button is pressed during power on - if so begin SMA Inverter bluetooth pairing/scanning
   if (digitalRead(INVERTERSCAN_PIN)==1 || ForcePair) {
-    BTScanForSMAInverterToPairWith();
+    return BTScanForSMAInverterToPairWith();
   }
 
   BTSwitchOn();  
+}
+
+void BTSendString(const __FlashStringHelper* str){
+  Serial.print(str);
+  Serial3.print(str);
+}
+
+void BTSendString(const char* str){
+  Serial.print(str);
+  Serial3.print(str);
 }
 
 void BTSwitchOn() {
@@ -86,9 +97,9 @@ void printState(){
   Serial.println("********** end print state **********");
 }
 
+char smabtinverteraddress[14];
 
-
-void BTScanForSMAInverterToPairWith()
+char *BTScanForSMAInverterToPairWith()
 {
   //Bluetooth configuration and scanning/pairing for HC05 chip
   //These sequence of instructions have taken a VERY long time to work out!
@@ -101,8 +112,9 @@ void BTScanForSMAInverterToPairWith()
 
   char retstring[50];
   char comparebuff[15]; 
-  char smabtinverteraddress[14];
   unsigned char tempaddress[6];  //BT address
+
+  char *comma;
 
   debugMsgln("Config BT: BTScanForSMAInverterToPairWith");
 
@@ -113,27 +125,35 @@ void BTScanForSMAInverterToPairWith()
   //Before tidy 8416 bytes, 8282, 8390
   //Send AT wake up
   BTSendStringAndWait(retstring,F("AT"));
-  //Factory reset to defaults
-  BTSendStringAndWait(retstring,F("AT+ORGL"));
-  //Reset
-  BTSendStringAndWait(retstring,F("AT+RESET"));
-  delay(1000);
   //Firmware Version = +VERSION=2.0-20100601
   BTSendStringAndWait(retstring,F("AT+VERSION?"));
+  //Factory reset to defaults
+  BTSendStringAndWait(retstring,F("AT+ORGL"));
+  //Reset to make sure that we are not in inquiring state and that AT+init will not fail.
+  BTSendStringAndWait(retstring,F("AT+RESET"));
+  delay(1000);
   //Name of chip
   BTSendStringAndWait(retstring,F("AT+NAME=SMA_SOLAR"));
-  //Set password to zeros
-  BTSendStringAndWait(retstring,F("AT+PSWD=0000"));
-  //MASTER mode
-  BTSendStringAndWait(retstring,F("AT+ROLE=1"));
   //Forget existing pairing
   BTSendStringAndWait(retstring,F("AT+RMAAD"));
+  //MASTER mode
+  BTSendStringAndWait(retstring,F("AT+ROLE=1"));
   //Sets speed to 9600 bits for normal operation (effective after reset of chip)
   // tried 38400. Works in CMD-mode, but doesn't connect in DATA mode.
-  BTSendStringAndWait(retstring,F("AT+UART=9600,0,0"));
+  BTSendStringAndWait(retstring,F("AT+UART=38400,0,0"));
+  //Set password to zeros
+  BTSendStringAndWait(retstring,F("AT+PSWD=0000"));
+
+  // find the inverter
   //Allow connection to any slave
   BTSendStringAndWait(retstring,F("AT+CMODE=1"));
-  //Initialize the SPP profile lib
+  //Limit results to SMA inverter bluetooth class/filters
+  BTSendStringAndWait(retstring,F("AT+IAC=9e8b33"));
+  // 1F04 = Class of device (SMA Inverter)
+  // 100 = Lenovo TAB
+  // 200 = Redmi 4 Makus
+  BTSendStringAndWait(retstring,F("AT+CLASS=1F00"));
+  // init SPP-lib. Otherwise INQ will not work
   BTSendStringAndWait(retstring,F("AT+INIT"));
 
   //Make sure were are in INITIALIZED mode
@@ -143,22 +163,14 @@ void BTScanForSMAInverterToPairWith()
   }  
   while (strncmp(retstring+7,comparebuff,11)!=0);  
 
-  //The following automatically scans for the SMA inverter and then pairs with it.
 
-  //Limit results to SMA inverter bluetooth class/filters
-  BTSendStringAndWait(retstring,F("AT+IAC=9e8b33"));
-
-  //1F04 = Class of device (SMA Inverter)
-  BTSendStringAndWait(retstring,F("AT+CLASS=1F00"));
-
-  //Just find first device which answers our call within 20 seconds
+  //Just find first device which answers our call within 20 seconds mode,max bluetooth, timeout
+  //Initialize the SPP profile lib
   BTSendStringAndWait(retstring,F("AT+INQM=1,1,20"));
-
   //Start the INQUIRE process
   BTSendStringAndWait(retstring,F("AT+INQ"));
-
   //Process the BT address returned an replace characters...
-  char *comma=strchr(retstring,',');
+  comma=strchr(retstring,',');
   strncpy(smabtinverteraddress,retstring+5,(comma-retstring)-5);
   smabtinverteraddress[(comma-retstring)-5]='\0';  //Add null string terminator
 
@@ -167,59 +179,20 @@ void BTScanForSMAInverterToPairWith()
     if (smabtinverteraddress[i]==':') smabtinverteraddress[i]=','; 
   }
 
-  //Serial.print(F("SMA BT="));Serial.println(smabtinverteraddress);
+  Serial.print(F("SMA BT address="));Serial.println(smabtinverteraddress);
 
-  //RNAME = get remote bluetooth name, usually looks like "+RNAME:SMA001d SN: 1234567890 SN123456"
+  //RNAME = get remote bluetooth name, usually looks like "+RNAME:SMA001d SN: 1234567890 SN123456". We don't really need it.
   BTSendStringAndWait(retstring,smabtinverteraddress,F("AT+RNAME?"));
 
-  //PAIR device
- Serial3.print(F("AT+PAIR="));
- Serial3.print(smabtinverteraddress);
- Serial3.println(F(",20"));
-  waitBlueToothReply(retstring);
-
-  //FSAD = Seek the authenticated device in the Bluetooth pair list
-  BTSendStringAndWait(retstring,smabtinverteraddress,F("AT+FSAD="));
-
-  //Ask BT chip for its address
-  BTSendStringAndWait(retstring,F("AT+ADDR?"));
-  //Convert BT Address into a more useful byte array, the BT address is in a really awful format to parse!
-  convertBTADDRStringToArray(retstring+6,tempaddress,':');
-
-  writeArrayIntoEEPROM(tempaddress,6,ADDRESS_MY_BTADDRESS);  //EEPROM address 0 contains our bluetooth chip address
-
-  //Ask BT chip what its set to pair with
-  BTSendStringAndWait(retstring,F("AT+MRAD?"));
-  //Convert BT Address into a more useful byte array, the BT address is in a really awful format to parse!
-  convertBTADDRStringToArray(retstring+6,tempaddress,':');
-
-  writeArrayIntoEEPROM(tempaddress,6,ADDRESS_SMAINVERTER_BTADDRESS);  //EEPROM address 10 contains SMA inverter address
+  // inverter found, now allow binding
+  //Allow connection to any slave
+  BTSendStringAndWait(retstring,F("AT+CMODE=0"));
 
   //BIND = Set/Inquire - bind Bluetooth address
   BTSendStringAndWait(retstring,smabtinverteraddress,F("AT+BIND="));
+  // BTSendStringAndWait(retstring,F("AT+BIND=80,25,8c32a"));
 
-  //Connect the module to the specified Bluetooth address. (Bluetooth address can be specified by the binding command)
-  BTSendStringAndWait(retstring,F("AT+CMODE=0"));
-
-  //Make sure were PAIRED and then connect...
-  strcpy_P(comparebuff, (const prog_char *)F("PAIRED"));
-  do {
-    BTSendStringAndWait(retstring,F("AT+STATE?"));
-  }  
-  while (strncmp(retstring+7,comparebuff,6)!=0);  
-
-  BTSendStringAndWait(retstring,F("AT+RESET"));
-
-  delay(1000);
-  printState();
-  delay(100000);
-
-  Serial3.end();
-
-  delay(100);
-  digitalWrite(BT_KEY, LOW);    // Turn off command mode
-  delay(500);  
-  debugMsgln("Bluetooth configure. Finished.");
+  return smabtinverteraddress;
 }
 
 
