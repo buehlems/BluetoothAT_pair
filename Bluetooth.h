@@ -35,3 +35,4 @@ unsigned char smaBTInverterAddressArray[6]={  0x00,0x80,0x25,0x08,0xc3,0x2a};  /
 unsigned char myBTAddress[6]={  0x00,0x80,0x25,0x08,0xc3,0x2a};  //Hold byte array with BT address
 
 char *BTScanForSMAInverterToPairWith();
+void BTwriteAddresses2EEPROM(bool verbose);

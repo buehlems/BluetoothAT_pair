@@ -1,3 +1,10 @@
+/* 
+   This code has been derived from NANODE SMA PV MONITOR. Licence is unchanged, details see below.
+   It has been stripped down to just pair with my SMA inverter, write all relevant data to the EEPROM then end the program.
+   Slight changes:
+   - BT class=1F00 instead of 1F04
+   - BT baud rate: 38400 instead of 9600
+
 /*
 NANODE SMA PV MONITOR
  
@@ -69,6 +76,43 @@ void BTSwitchOff() {
 
   pinMode(BT_KEY, OUTPUT);
   digitalWrite(BT_KEY, LOW);    // Turn off command mode 
+}
+
+void writeArrayIntoEEPROM(unsigned char readbuffer[],int length,int EEPROMoffset, bool verbose=false) {
+  //Writes an array into EEPROM and calculates a simple XOR checksum
+  byte checksum=0;
+  if(verbose)
+    Serial.println("writeArrayIntoEEPROM");
+  for(int i=0;i<length; i++) {
+    EEPROM.write(EEPROMoffset+i,readbuffer[i]);
+    if(verbose){
+      Serial.print(EEPROMoffset+i); Serial.print("="); 
+      Serial.println(readbuffer[i],HEX);   
+    }
+    checksum^= readbuffer[i];
+  }
+
+  //Serial.print(EEPROMoffset+length); Serial.print("="); Serial.println(checksum,HEX);
+  EEPROM.write(EEPROMoffset+length,checksum);
+}
+
+bool readArrayFromEEPROM(unsigned char readbuffer[],int length,int EEPROMoffset, bool verbose=false) {
+  //Writes an array into EEPROM and calculates a simple XOR checksum
+  byte checksum=0;
+
+  if(verbose)
+    Serial.println("readArrayFromEEPROM");
+
+  for(int i=0;i<length; i++) {
+    readbuffer[i]=EEPROM.read(EEPROMoffset+i);
+    if(verbose){
+      Serial.print(EEPROMoffset+i); 
+      Serial.print("="); Serial.println(readbuffer[i],HEX);   
+    }
+    checksum^= readbuffer[i];
+  }
+  //Serial.print(EEPROMoffset+length); Serial.print("="); Serial.println(checksum,HEX);
+  return (checksum==EEPROM.read(EEPROMoffset+length)); 
 }
 
 void printState(){
@@ -184,6 +228,17 @@ char *BTScanForSMAInverterToPairWith()
   //RNAME = get remote bluetooth name, usually looks like "+RNAME:SMA001d SN: 1234567890 SN123456". We don't really need it.
   BTSendStringAndWait(retstring,smabtinverteraddress,F("AT+RNAME?"));
 
+  // start added
+  //PAIR device
+  Serial3.print(F("AT+PAIR="));
+  Serial3.print(smabtinverteraddress);
+  Serial3.println(F(",20"));
+  waitBlueToothReply(retstring);
+
+  //FSAD = Seek the authenticated device in the Bluetooth pair list
+  BTSendStringAndWait(retstring,smabtinverteraddress,F("AT+FSAD="));
+  // end added
+
   // inverter found, now allow binding
   //Allow connection to any slave
   BTSendStringAndWait(retstring,F("AT+CMODE=0"));
@@ -192,35 +247,44 @@ char *BTScanForSMAInverterToPairWith()
   BTSendStringAndWait(retstring,smabtinverteraddress,F("AT+BIND="));
   // BTSendStringAndWait(retstring,F("AT+BIND=80,25,8c32a"));
 
+  // start added
+ //Make sure were PAIRED and then connect...
+  strcpy_P(comparebuff, (const prog_char *)F("PAIRED"));
+  do {
+    BTSendStringAndWait(retstring,F("AT+STATE?"));
+  }  
+  while (strncmp(retstring+7,comparebuff,6)!=0);  
+
+  // end added
+
   return smabtinverteraddress;
 }
 
+// get the BT addresses of the BT module and the inverter and write them to the EEPROM
+void BTwriteAddresses2EEPROM(bool verbose=true){
+  char retstring[50];
+  unsigned char tempaddress[6];  //BT address
 
+  if(verbose)
+    Serial.println(F("writeBtAddresses2EEPROM"));
 
-void writeArrayIntoEEPROM(unsigned char readbuffer[],int length,int EEPROMoffset) {
-  //Writes an array into EEPROM and calculates a simple XOR checksum
-  byte checksum=0;
-  Serial.println("writeArrayIntoEEPROM");
-  for(int i=0;i<length; i++) {
-    EEPROM.write(EEPROMoffset+i,readbuffer[i]);
-    Serial.print(EEPROMoffset+i); Serial.print("="); Serial.println(readbuffer[i],HEX);   
-    checksum^= readbuffer[i];
-  }
+ //Ask BT chip for its address
+  BTSendStringAndWait(retstring,F("AT+ADDR?"));
+  //Convert BT Address into a more useful byte array, the BT address is in a really awful format to parse!
+  convertBTADDRStringToArray(retstring+6,tempaddress,':');
 
-  //Serial.print(EEPROMoffset+length); Serial.print("="); Serial.println(checksum,HEX);
-  EEPROM.write(EEPROMoffset+length,checksum);
-}
+  Serial.println(F("BT module BT address as stored in memory"));
+  writeArrayIntoEEPROM(tempaddress,6,ADDRESS_MY_BTADDRESS, verbose);  //EEPROM address 0 contains our bluetooth chip address
 
-bool readArrayFromEEPROM(unsigned char readbuffer[],int length,int EEPROMoffset) {
-  //Writes an array into EEPROM and calculates a simple XOR checksum
-  byte checksum=0;
-  for(int i=0;i<length; i++) {
-    readbuffer[i]=EEPROM.read(EEPROMoffset+i);
-    //Serial.print(EEPROMoffset+i); Serial.print("="); Serial.println(readbuffer[i],HEX);   
-    checksum^= readbuffer[i];
-  }
-  //Serial.print(EEPROMoffset+length); Serial.print("="); Serial.println(checksum,HEX);
-  return (checksum==EEPROM.read(EEPROMoffset+length)); 
+  //Ask BT chip what its set to pair with -> this is the inverter
+  // BTSendStringAndWait(retstring,F("AT+MRAD?"));
+  //Convert BT Address into a more useful byte array, the BT address is in a really awful format to parse!
+  convertBTADDRStringToArray(smabtinverteraddress,tempaddress,',');
+
+  Serial.println(F("SMA inverter BT address as stored in memory"));
+  // writeArrayIntoEEPROM(tempaddress,6,ADDRESS_SMAINVERTER_BTADDRESS, verbose);  //EEPROM address 10 contains SMA inverter address
+  writeArrayIntoEEPROM(tempaddress,6,ADDRESS_SMAINVERTER_BTADDRESS, verbose);  //EEPROM address 10 contains SMA inverter address
+  
 }
 
 void BTSendStringAndWait(char retstring[],  const __FlashStringHelper* str) {

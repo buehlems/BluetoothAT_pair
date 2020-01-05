@@ -1,0 +1,103 @@
+This is a typical pair sequence of a HC-05 module
+
+bt_clear
+end bt_clear
+Wait for possible data
+must be in CMD-mode
+Config BT: BTScanForSMAInverterToPairWith
+BTSendStringAndWait: AT
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+VERSION?
++VERSION:hc01.comV2.1
+OK
+BTSendStringAndWait result: +VERSION:hc01.comV2.1
+BTSendStringAndWait: AT+ORGL
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+RESET
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+NAME=SMA_SOLAR
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+RMAAD
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+ROLE=1
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+UART=38400,0,0
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+PSWD=0000
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+CMODE=1
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+IAC=9e8b33
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+CLASS=1F00
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+INIT
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+STATE?
++STATE:INITIALIZED
+OK
+BTSendStringAndWait result: +STATE:INITIALIZED
+BTSendStringAndWait: AT+INQM=1,1,20
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+INQ
++INQ:80:25:8C32A,1FA8,FFB8
+OK
+BTSendStringAndWait result: +INQ:80:25:8C32A,1FA8,FFB8
+SMA BT address=80,25,8C32A
+BTSendStringAndWait: AT+RNAME?80,25,8C32A
++RNAME:SMA010d SN: 2100019318 SN210001
+OK
+BTSendStringAndWait result: +RNAME:SMA010d SN: 2100019318 SN210001
+OK
+BTSendStringAndWait: AT+FSAD=80,25,8C32A
+OK
+BTSendStringAndWait no resultBTSendStringAndWait: AT+CMODE=0
+OK
+BTSendStringAndWait result: 
+BTSendStringAndWait: AT+BIND=80,25,8C32A
+OK
+BTSendStringAndWait no resultBTSendStringAndWait: AT+STATE?
++STATE:PAIRED
+OK
+BTSendStringAndWait result: +STATE:PAIRED
+writeBtAddresses2EEPROM
+BTSendStringAndWait: AT+ADDR?
++ADDR:2016:4:75734
+OK
+BTSendStringAndWait result: +ADDR:2016:4:75734
+BT module BT address as stored in memory
+writeArrayIntoEEPROM
+0=34
+1=57
+2=7
+3=4
+4=16
+5=20
+SMA inverter BT address as stored in memory
+writeArrayIntoEEPROM
+10=2A
+11=C3
+12=8
+13=25
+14=80
+15=0
+
+
+
+Now I am ready to be connected to the inverter. Its address is: 80,25,8C32A
+Unplug the Arduino, switch to DATA mode and replug.
+The HC-05 should auto-connect. Watch out for blink-blink-pause. In the serial monitor you should see this sequence:
+0x7e ~ | 0x1f . | 0x00 . | 0x61 a | 0x2a * | 0xc3 . | 0x08 . | 0x25 % | 0x80 . | 0x00 . | 0x00 . | 0x00 . | 0x00 . | 0x00 . | 0x00 . | 0x00 . | 0x02 . | 0x00 . | 0x00 . | 0x04 . | 0x70 p | 0x00 . | 0x0a . | 0x00 . | 0x00 . | 0x00 . | 0x00 . | 0x01 . | 0x00 . | 0x00 . | 0x00 .

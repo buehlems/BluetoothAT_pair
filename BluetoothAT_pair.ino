@@ -1,17 +1,43 @@
 /*
-  BluetoothAT_test: tests the  Bluetooth Shield v2.2
+ * SMA monitor talkey thing. Majority of this code comes from the
+ * nanodesmapvmonitor project by Stuart Pittaway, I've just moved
+ * stuff around a bit. Thanks, Stuart!
+ *
+
+NANODE SMA PV MONITOR
+
+Latest version found at https://github.com/stuartpittaway/nanodesmapvmonitor
+Licence
+Attribution-NonCommercial-ShareAlike 3.0 Unported (CC BY-NC-SA 3.0)
+http://creativecommons.org/licenses/by-nc-sa/3.0/
+
+You are free:
+    to Share - to copy, distribute and transmit the work
+    to Remix - to adapt the work
+Under the following conditions:
+    Attribution - You must attribute the work in the manner specified by the author or licensor (but not in any way that suggests that they endorse you or your use of the work).
+    Noncommercial - You may not use this work for commercial purposes.
+    Share Alike - If you alter, transform, or build upon this work, you may distribute the resulting work only under the same or similar license to this one.
+
+Work is copyright Stuart Pittaway, (c)2012.
+*/
+
+
+
+
+/*
+  BluetoothAT_pair: pairs BT HC-05 with SMA inverter and writes BT addresses to EEPROM
   Settings: Baud=38400, data bits: 8, stop bits: 1, parity none, flow control none
   Connection BT-Arduino: Tx - Rx3, Rx - Tx3
-
 */
 
 /* This has been derived from:
 NANODE SMA PV MONITOR
-C:\Daten\Markus\Arduino\arduino-1.0.1\sketches\nanodesmapvmonitor
  
  Latest version found at https://github.com/stuartpittaway/nanodesmapvmonitor
  
  */
+
 #define  __PROG_TYPES_COMPAT__ 1
 #include <Arduino.h>
 #include <HardwareSerial.h>
@@ -73,7 +99,7 @@ char *InverterBTAddress=NULL;
 // the setup routine runs once when you press reset:
 void setup() {
   // initialize serial communication at 9600 bits per second:
-  Serial.begin(38400);
+  Serial.begin(115200);
   Serial3.begin(38400);
   bt_clear();
   util::println(F("Wait for possible data"));
@@ -85,6 +111,7 @@ void setup() {
     // there is available after clear -> BT must be in cmd mode and waiting for AT commands
     Serial.println("must be in CMD-mode");
     InverterBTAddress=BTScanForSMAInverterToPairWith();
+    BTwriteAddresses2EEPROM(true); // write the addresses and print them
     util::println(F("\n\n"));
     util::printf (F("Now I am ready to be connected to the inverter. Its address is: %s\n"),InverterBTAddress);
     util::println(F("Unplug the Arduino, switch to DATA mode and replug."));
